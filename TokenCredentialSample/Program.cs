@@ -3,12 +3,37 @@ using Microsoft.Graph;
 using Microsoft.Identity.Client;
 using System;
 using System.Net.Http;
+using System.Threading.Tasks;
+using Azure.Identity;
 
 namespace TokenCredentialSample
 {
     class Program
     {
-        public static async System.Threading.Tasks.Task Main(string[] args)
+        public static async Task Main(string[] args)
+        {
+            //await GetUseInternalTokenCredential();
+            await GetUsingAzureCoreCredential();
+        }
+
+        public static async Task GetUsingAzureCoreCredential()
+        {
+            string clientId = "d662ac70-7482-45af-9dc3-c3cde8eeede4";
+            string[] scopes = new[] { "User.Read", "Mail.ReadWrite" };
+
+            InteractiveBrowserCredential myBrowserCredential = new InteractiveBrowserCredential(clientId);
+            TokenCredentialAuthProvider tokenCredentialAuthProvider = new TokenCredentialAuthProvider(myBrowserCredential, scopes);
+
+            //Try to get something from the Graph!!
+            HttpClient httpClient = GraphClientFactory.Create(tokenCredentialAuthProvider);
+            HttpRequestMessage requestMessage = new HttpRequestMessage(HttpMethod.Get, "https://graph.microsoft.com/v1.0/me/");
+            HttpResponseMessage response = await httpClient.SendAsync(requestMessage);
+
+            //Print out the response :)
+            string jsonResponse = await response.Content.ReadAsStringAsync();
+            Console.WriteLine(jsonResponse);
+        }
+        public static async Task GetUseInternalTokenCredential()
         {
             string clientId = "d662ac70-7482-45af-9dc3-c3cde8eeede4";
             string[] scopes = new[] { "User.Read", "Mail.ReadWrite" };
@@ -32,7 +57,6 @@ namespace TokenCredentialSample
             //Print out the response :)
             string jsonResponse = await response.Content.ReadAsStringAsync();
             Console.WriteLine(jsonResponse);
-
         }
     }
 }
