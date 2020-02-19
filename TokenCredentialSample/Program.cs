@@ -12,11 +12,34 @@ namespace TokenCredentialSample
     {
         public static async Task Main(string[] args)
         {
-            //await GetUseInternalTokenCredential();
-            await GetUsingAzureCoreCredential();
+            //Internal credential
+            // await GetUseInternalInteractiveTokenCredential();
+            // await GetUsingAzureCoreInteractiveCredential();
+            //Username password credential
+            await GetUseUsernamePasswordCredential();
+
         }
 
-        public static async Task GetUsingAzureCoreCredential()
+        private static async Task GetUseUsernamePasswordCredential()
+        {
+            string[] scopes = new[] { "User.Read"};
+            string clientId = "cdc858be-9aaa-4339-94e1-86414d05a056";
+            UsernamePasswordCredential usernamePasswordCredential = new UsernamePasswordCredential("admin@m365x638680.onmicrosoft.com", "X5u3qG9oaY",
+                "9cacb64e-358b-418b-967a-3cabc2a0ea95", clientId);
+            TokenCredentialAuthProvider tokenCredentialAuthProvider = new TokenCredentialAuthProvider(usernamePasswordCredential, scopes);
+
+            //Try to get something from the Graph!!
+            HttpClient httpClient = GraphClientFactory.Create(tokenCredentialAuthProvider);
+            HttpRequestMessage requestMessage = new HttpRequestMessage(HttpMethod.Get, "https://graph.microsoft.com/v1.0/me/");
+            HttpResponseMessage response = await httpClient.SendAsync(requestMessage);
+
+            //Print out the response :)
+            string jsonResponse = await response.Content.ReadAsStringAsync();
+            Console.WriteLine(jsonResponse);
+
+        }
+
+        public static async Task GetUsingAzureCoreInteractiveCredential()
         {
             string clientId = "d662ac70-7482-45af-9dc3-c3cde8eeede4";
             string[] scopes = new[] { "User.Read", "Mail.ReadWrite" };
@@ -33,7 +56,7 @@ namespace TokenCredentialSample
             string jsonResponse = await response.Content.ReadAsStringAsync();
             Console.WriteLine(jsonResponse);
         }
-        public static async Task GetUseInternalTokenCredential()
+        public static async Task GetUseInternalInteractiveTokenCredential()
         {
             string clientId = "d662ac70-7482-45af-9dc3-c3cde8eeede4";
             string[] scopes = new[] { "User.Read", "Mail.ReadWrite" };
