@@ -1,8 +1,9 @@
-﻿using Azure.Core;
-using Microsoft.Graph;
+﻿using Microsoft.Graph;
 using Microsoft.Identity.Client;
 using System;
+using System.IO;
 using System.Net.Http;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using Azure.Identity;
 
@@ -12,24 +13,27 @@ namespace TokenCredentialSample
     {
         public static async Task Main(string[] args)
         {
-            //Internal credential
-            await GetUseInternalInteractiveTokenCredential();
-            await GetUsingAzureCoreInteractiveCredential();
+            // //Internal credential
+            // await GetUseInternalInteractiveTokenCredential();
+            // await GetUsingAzureCoreInteractiveCredential();
+            //
+            // //Username password credential
+            // await GetUseUsernamePasswordCredential();
+            //
+            // //DeviceCodeCredential credential
+            // await GetClientSecretCredentialCredential();
+            //
+            // //ClientSecretCredentials credential
+            // await GetDeviceCodeCredential();
+            //
+            // //ClientSecretCredentials credential
+            // await GetDeviceCodeCredential();
+            //
+            // //Authorization Code credential
+            // await GetAuthorizationCodeCredential();
 
-            //Username password credential
-            await GetUseUsernamePasswordCredential();
-
-            //DeviceCodeCredential credential
-            await GetClientSecretCredentialCredential();
-
-            //ClientSecretCredentials credential
-            await GetDeviceCodeCredential();
-
-            //ClientSecretCredentials credential
-            await GetDeviceCodeCredential();
-
-            //Authorization Code credential
-            await GetAuthorizationCodeCredential();
+            // Client Secret with certificate
+            // await GetClientSecretCredentialCredentialWithCertificate();
         }
 
         private static async Task GetAuthorizationCodeCredential()
@@ -97,7 +101,27 @@ namespace TokenCredentialSample
             string jsonResponse = await response.Content.ReadAsStringAsync();
             Console.WriteLine(jsonResponse);
         }
-        
+
+        private static async Task GetClientSecretCredentialCredentialWithCertificate()
+        {
+            string[] scopes = new[] { "https://graph.microsoft.com/.default" };//see https://stackoverflow.com/questions/51781898/aadsts70011-the-provided-value-for-the-input-parameter-scope-is-not-valid/51789899
+
+            // ClientSecretCredential clientSecretCredential = new ClientSecretCredential("9cacb64e-358b-418b-967a-3cabc2a0ea95", "cdc858be-9aaa-4339-94e1-86414d05a056", "AI6ju0@Jn4ECkg1rv[QOrW_.hn4_VD26");
+            
+            X509Certificate2 x509Certificate2 = new X509Certificate2("mycert.pfx", "Nemore11");
+            ClientCertificateCredential clientCertificateCredential = new ClientCertificateCredential("9cacb64e-358b-418b-967a-3cabc2a0ea95", "317bd2d8-58b7-4be6-b5bc-d5567a6df8db", x509Certificate2);
+            TokenCredentialAuthProvider tokenCredentialAuthProvider = new TokenCredentialAuthProvider(clientCertificateCredential, scopes);
+
+            //Try to get something from the Graph!!
+            HttpClient httpClient = GraphClientFactory.Create(tokenCredentialAuthProvider);
+            HttpRequestMessage requestMessage = new HttpRequestMessage(HttpMethod.Get, "https://graph.microsoft.com/v1.0/users/admin@m365x638680.onmicrosoft.com/");
+            HttpResponseMessage response = await httpClient.SendAsync(requestMessage);
+
+            //Print out the response :)
+            string jsonResponse = await response.Content.ReadAsStringAsync();
+            Console.WriteLine(jsonResponse);
+        }
+
         private static async Task GetUseUsernamePasswordCredential()
         {
             string[] scopes = new[] { "User.Read"};
