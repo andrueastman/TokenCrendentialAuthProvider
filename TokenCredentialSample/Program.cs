@@ -5,6 +5,7 @@ using System.IO;
 using System.Net.Http;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
+using Azure.Core;
 using Azure.Identity;
 
 namespace TokenCredentialSample
@@ -34,6 +35,71 @@ namespace TokenCredentialSample
 
             // Client Secret with certificate
             // await GetClientSecretCredentialCredentialWithCertificate();
+
+            // Chained Token Credential
+            // await GetChainedTokenCredential();
+
+            // Environment Token Credential
+            // await GetEnvironmentTokenCredential();
+
+            // Default Token
+            // await GetDefaultTokenCredential();
+
+        }
+
+        private static async Task GetDefaultTokenCredential()
+        {
+            string[] scopes = new[] {"https://graph.microsoft.com/.default"};
+            DefaultAzureCredential defaultAzureCredential = new DefaultAzureCredential();
+            TokenCredentialAuthProvider tokenCredentialAuthProvider = new TokenCredentialAuthProvider(defaultAzureCredential, scopes);
+
+            //Try to get something from the Graph!!
+            HttpClient httpClient = GraphClientFactory.Create(tokenCredentialAuthProvider);
+
+            HttpRequestMessage requestMessage = new HttpRequestMessage(HttpMethod.Get, "https://graph.microsoft.com/v1.0/me");
+            HttpResponseMessage response = await httpClient.SendAsync(requestMessage);
+
+            //Print out the response :)
+            string jsonResponse = await response.Content.ReadAsStringAsync();
+            Console.WriteLine(jsonResponse);
+        }
+
+        private static async Task GetEnvironmentTokenCredential()
+        {
+            string[] scopes = new[] { "https://graph.microsoft.com/.default" };//see https://stackoverflow.com/questions/51781898/aadsts70011-the-provided-value-for-the-input-parameter-scope-is-not-valid/51789899
+
+            EnvironmentCredential environmentCredential = new EnvironmentCredential();
+            TokenCredentialAuthProvider tokenCredentialAuthProvider = new TokenCredentialAuthProvider(environmentCredential, scopes);
+
+            //Try to get something from the Graph!!
+            HttpClient httpClient = GraphClientFactory.Create(tokenCredentialAuthProvider);
+
+            HttpRequestMessage requestMessage = new HttpRequestMessage(HttpMethod.Get, "https://graph.microsoft.com/v1.0/users/admin@m365x638680.onmicrosoft.com/");
+            HttpResponseMessage response = await httpClient.SendAsync(requestMessage);
+
+            //Print out the response :)
+            string jsonResponse = await response.Content.ReadAsStringAsync();
+            Console.WriteLine(jsonResponse);
+        }
+
+        private static async Task GetChainedTokenCredential()
+        {
+            string[] scopes = new[] { "User.Read" };
+            string clientId = "d662ac70-7482-45af-9dc3-c3cde8eeede4";
+            EnvironmentCredential environmentCredential = new EnvironmentCredential();
+            InteractiveBrowserCredential myBrowserCredential = new InteractiveBrowserCredential(clientId);
+            TokenCredential [] tokenCredentials = new TokenCredential[]{ environmentCredential , myBrowserCredential };
+            ChainedTokenCredential chainedTokenCredential = new ChainedTokenCredential(tokenCredentials);
+            TokenCredentialAuthProvider tokenCredentialAuthProvider = new TokenCredentialAuthProvider(chainedTokenCredential, scopes);
+
+            //Try to get something from the Graph!!
+            HttpClient httpClient = GraphClientFactory.Create(tokenCredentialAuthProvider);
+            HttpRequestMessage requestMessage = new HttpRequestMessage(HttpMethod.Get, "https://graph.microsoft.com/v1.0/users/admin@m365x638680.onmicrosoft.com/");
+            HttpResponseMessage response = await httpClient.SendAsync(requestMessage);
+
+            //Print out the response :)
+            string jsonResponse = await response.Content.ReadAsStringAsync();
+            Console.WriteLine(jsonResponse);
         }
 
         private static async Task GetAuthorizationCodeCredential()
