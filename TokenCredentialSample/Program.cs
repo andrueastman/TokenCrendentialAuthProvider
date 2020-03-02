@@ -4,9 +4,11 @@ using System;
 using System.IO;
 using System.Net.Http;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading;
 using System.Threading.Tasks;
 using Azure.Core;
 using Azure.Identity;
+using Newtonsoft.Json.Linq;
 
 namespace TokenCredentialSample
 {
@@ -45,6 +47,25 @@ namespace TokenCredentialSample
             // Default Token
             // await GetDefaultTokenCredential();
 
+            // Test actual work
+            await GetsWithActual();
+        }
+
+        private static async Task GetsWithActual()
+        {
+            string clientId = "555f95bc-ea6e-4dae-b28d-a0fbd2bc5f24";
+            string[] scopes = new[] { "User.Read", "Mail.ReadWrite" };
+
+            InteractiveBrowserCredential myBrowserCredential = new InteractiveBrowserCredential(clientId);
+
+            //Try to get something from the Graph!!
+            BaseClient baseClient = new BaseClient("https://graph.microsoft.com/", myBrowserCredential);
+
+            BaseRequest requestMessage = new BaseRequest( "https://graph.microsoft.com/v1.0/me/",baseClient);
+            var response = await requestMessage.WithScopes<BaseRequest>(scopes).SendAsync<JObject>(null,CancellationToken.None);
+
+            //Print out the response :)
+            Console.WriteLine(response.ToString());
         }
 
         private static async Task GetDefaultTokenCredential()
@@ -225,30 +246,5 @@ namespace TokenCredentialSample
             Console.WriteLine(jsonResponse);
         }
 
-        private static async Task GetUseInternalInteractiveTokenCredential()
-        {
-            string clientId = "d662ac70-7482-45af-9dc3-c3cde8eeede4";
-            string[] scopes = new[] { "User.Read", "Mail.ReadWrite" };
-
-            //Create the msal application
-            IPublicClientApplication publicClientApplication = PublicClientApplicationBuilder
-                .Create(clientId).WithRedirectUri("http://localhost:1234")
-                .Build();
-
-            //Create the token credential 
-            InteractiveMsalTokenCredential msalTokenCredential = new InteractiveMsalTokenCredential(publicClientApplication);
-
-            //Pass the token credential to the AuthProvider
-            TokenCredentialAuthProvider tokenCredentialAuthProvider = new TokenCredentialAuthProvider(msalTokenCredential, scopes);
-
-            //TRy to get something from the Graph!!
-            HttpClient httpClient = GraphClientFactory.Create(tokenCredentialAuthProvider);
-            HttpRequestMessage requestMessage = new HttpRequestMessage(HttpMethod.Get, "https://graph.microsoft.com/v1.0/me/");
-            HttpResponseMessage response = await httpClient.SendAsync(requestMessage);
-
-            //Print out the response :)
-            string jsonResponse = await response.Content.ReadAsStringAsync();
-            Console.WriteLine(jsonResponse);
-        }
     }
 }
