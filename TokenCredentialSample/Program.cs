@@ -1,15 +1,11 @@
-﻿using Microsoft.Graph;
-using Microsoft.Identity.Client;
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Net.Http;
-using System.Security.Cryptography.X509Certificates;
-using System.Threading;
+using System.Net.Http.Headers;
+using System.Text;
 using System.Threading.Tasks;
-using Azure.Core;
-using Azure.Identity;
-using Newtonsoft.Json.Linq;
+using Microsoft.Graph;
+using Microsoft.Identity.Client;
 
 namespace TokenCredentialSample
 {
@@ -17,264 +13,118 @@ namespace TokenCredentialSample
     {
         public static async Task Main(string[] args)
         {
-            // //Internal credential
-            // await GetUseInternalInteractiveTokenCredential();
-            // await GetUsingAzureCoreInteractiveCredential();
-            //
-            // //Username password credential
-            // await GetUseUsernamePasswordCredential();
-            //
-            // //DeviceCodeCredential credential
-            // await GetClientSecretCredentialCredential();
-            //
-            // //ClientSecretCredentials credential
-            // await GetDeviceCodeCredential();
-            //
-            // //ClientSecretCredentials credential
-            // await GetDeviceCodeCredential();
-            //
-            // //Authorization Code credential
-            // await GetAuthorizationCodeCredential();
+            IPublicClientApplication publicClientApplication = PublicClientApplicationBuilder
+                .Create("555f95bc-ea6e-4dae-b28d-a0fbd2bc5f24").WithRedirectUri("http://localhost:1234")
+                .Build();
 
-            // Client Secret with certificate
-            // await GetClientSecretCredentialCredentialWithCertificate();
+            AuthenticationResult authenticationResult = await publicClientApplication
+                .AcquireTokenInteractive(new string[] {"User.Read", "Mail.Read", "Calendars.Read", "Notes.ReadWrite.All" }).ExecuteAsync();
+            DelegateAuthenticationProvider authenticationProvider = new DelegateAuthenticationProvider((requestMessage) =>
+            {
+                requestMessage
+                    .Headers
+                    .Authorization = new AuthenticationHeaderValue("bearer", authenticationResult.AccessToken);
 
-            // Chained Token Credential
-            // await GetChainedTokenCredential();
+                return Task.FromResult(0);
+            });
 
-            // Environment Token Credential
-            // await GetEnvironmentTokenCredential();
+            // Create http GET request.
+            HttpRequestMessage httpRequestMessage1 =
+                new HttpRequestMessage(HttpMethod.Get, "https://graph.microsoft.com/v1.0/me/");
 
-            // Default Token
-            // await GetDefaultTokenCredential();
+            // Create http POST request.
+            string jsonContent = "{" +
+                                 "\"displayName\": \"My Notebook1\"" +
+                                 "}";
+            HttpRequestMessage httpRequestMessage2 = new HttpRequestMessage(HttpMethod.Post,
+                "https://graph.microsoft.com/v1.0/me/onenote/notebooks")
+            {
+                Content = new StringContent(jsonContent, Encoding.UTF8, "application/json")
+            };
 
-            // Test actual work
-            // await GetsWithActual();
+            // Create batch request steps with request ids.
+            BatchRequestStep requestStep1 = new BatchRequestStep("1", httpRequestMessage1, null);
+            BatchRequestStep requestStep2 = new BatchRequestStep("2", httpRequestMessage2, new List<string> { "1" });
 
-            // Test with IntegratedWindows Auth
-            await TestWithIntergratedWindowsAuth();
+            // Add batch request steps to BatchRequestContent.
+            BatchRequestContent batchRequestContent = new BatchRequestContent();
+            batchRequestContent.AddBatchRequestStep(requestStep1);
+            batchRequestContent.AddBatchRequestStep(requestStep2);
+
+            BaseClient baseClient = new BaseClient("https://graph.microsoft.com/v1.0/", authenticationProvider);
+            var responses = await baseClient.Batch.Request().PostAsync(batchRequestContent);
+            foreach (var responsConetHttpResponseMessagee in await responses.GetResponsesAsync())
+            {
+                if (responsConetHttpResponseMessagee.Value.Content != null)
+                {
+                    Console.WriteLine("Content for Request");
+                    Console.WriteLine(await responsConetHttpResponseMessagee.Value.Content.ReadAsStringAsync());
+                    Console.WriteLine();
+                }
+            }
         }
 
-        private static async Task TestWithIntergratedWindowsAuth()
+
+
+        private static async Task TestBasics(HttpClient httpClient)
         {
-string clientId = "555f95bc-ea6e-4dae-b28d-a0fbd2bc5f24";
-string authority = "https://login.microsoftonline.com/organizations/";
-string[] scopes = new[] { "User.Read", "Mail.ReadWrite" };
+            // Create http GET request.
+            HttpRequestMessage httpRequestMessage1 =
+                new HttpRequestMessage(HttpMethod.Get, "https://graph.microsoft.com/v1.0/me/");
 
-IPublicClientApplication publicClientApplication = PublicClientApplicationBuilder
-    .Create(clientId)
-    .Build();
+            // Create http POST request.
+            string jsonContent = "{" +
+                                 "\"displayName\": \"My Notebook\"" +
+                                 "}";
+            HttpRequestMessage httpRequestMessage2 = new HttpRequestMessage(HttpMethod.Post,
+                "https://graph.microsoft.com/v1.0/me/onenote/notebooks")
+            {
+                Content = new StringContent(jsonContent, Encoding.UTF8, "application/json")
+            };
 
-IntegratedWindowsTokenCredential integratedWindowsTokenCredential = new IntegratedWindowsTokenCredential(publicClientApplication);
-TokenCredentialAuthProvider tokenCredentialAuthProvider = new TokenCredentialAuthProvider(integratedWindowsTokenCredential, scopes);
+            // Create batch request steps with request ids.
+            BatchRequestStep requestStep1 = new BatchRequestStep("1", httpRequestMessage1, null);
+            BatchRequestStep requestStep2 = new BatchRequestStep("2", httpRequestMessage2, new List<string> { "1" });
 
-//Try to get something from the Graph!!
-HttpClient httpClient = GraphClientFactory.Create(tokenCredentialAuthProvider);
+            // Add batch request steps to BatchRequestContent.
+            BatchRequestContent batchRequestContent = new BatchRequestContent();
+            batchRequestContent.AddBatchRequestStep(requestStep1);
+            batchRequestContent.AddBatchRequestStep(requestStep2);
 
-HttpRequestMessage requestMessage = new HttpRequestMessage(HttpMethod.Get, "https://graph.microsoft.com/v1.0/me");
-            HttpResponseMessage response = await httpClient.SendAsync(requestMessage);
+            // Send batch request with BatchRequestContent.
+            HttpResponseMessage response = await httpClient.PostAsync("https://graph.microsoft.com/v1.0/$batch", batchRequestContent);
 
-            //Print out the response :)
-            string jsonResponse = await response.Content.ReadAsStringAsync();
-            Console.WriteLine(jsonResponse);
+            // Handle http responses using BatchResponseContent.
+            BatchResponseContent batchResponseContent = new BatchResponseContent(response);
+            Dictionary<string, HttpResponseMessage> responses = await batchResponseContent.GetResponsesAsync();
+            foreach (var responsConetHttpResponseMessagee in responses)
+            {
+                if (responsConetHttpResponseMessagee.Value.Content != null)
+                {
+                    Console.WriteLine("Content for Request");
+                    Console.WriteLine(await responsConetHttpResponseMessagee.Value.Content.ReadAsStringAsync());
+                    Console.WriteLine();
+                }
+            }
+            Console.WriteLine();
+            Console.WriteLine();
+            HttpResponseMessage httpResponse1 = await batchResponseContent.GetResponseByIdAsync("1");
+            if (httpResponse1.Content != null)
+            {
+                Console.WriteLine("Content for Request 1");
+                Console.WriteLine(await httpResponse1.Content.ReadAsStringAsync());
+            }
+            Console.WriteLine();
+            HttpResponseMessage httpResponse2 = await batchResponseContent.GetResponseByIdAsync("2");
+            if (httpResponse2.Content != null)
+            {
+                Console.WriteLine("Content for Request 2");
+                Console.WriteLine(await httpResponse2.Content.ReadAsStringAsync());
+            }
 
-
+            string nextLink = await batchResponseContent.GetNextLinkAsync();
+            Console.WriteLine("Next Link");
+            Console.WriteLine(nextLink);
         }
-
-        private static async Task GetsWithActual()
-        {
-            string clientId = "555f95bc-ea6e-4dae-b28d-a0fbd2bc5f24";
-            string[] scopes = new[] { "User.Read", "Mail.ReadWrite" };
-
-InteractiveBrowserCredential myBrowserCredential = new InteractiveBrowserCredential(clientId);
-
-//Try to get something from the Graph!!
-BaseClient baseClient = new BaseClient("https://graph.microsoft.com/", myBrowserCredential);
-
-BaseRequest requestMessage = new BaseRequest( "https://graph.microsoft.com/v1.0/me/",baseClient);
-var response = await requestMessage.WithScopes<BaseRequest>(scopes).SendAsync<JObject>(null,CancellationToken.None);
-
-            //Print out the response :)
-            Console.WriteLine(response.ToString());
-        }
-
-        private static async Task GetDefaultTokenCredential()
-        {
-            string[] scopes = new[] {"https://graph.microsoft.com/.default"};
-            DefaultAzureCredential defaultAzureCredential = new DefaultAzureCredential();
-            TokenCredentialAuthProvider tokenCredentialAuthProvider = new TokenCredentialAuthProvider(defaultAzureCredential, scopes);
-
-            //Try to get something from the Graph!!
-            HttpClient httpClient = GraphClientFactory.Create(tokenCredentialAuthProvider);
-
-            HttpRequestMessage requestMessage = new HttpRequestMessage(HttpMethod.Get, "https://graph.microsoft.com/v1.0/me");
-            HttpResponseMessage response = await httpClient.SendAsync(requestMessage);
-
-            //Print out the response :)
-            string jsonResponse = await response.Content.ReadAsStringAsync();
-            Console.WriteLine(jsonResponse);
-        }
-
-        private static async Task GetEnvironmentTokenCredential()
-        {
-            string[] scopes = new[] { "https://graph.microsoft.com/.default" };//see https://stackoverflow.com/questions/51781898/aadsts70011-the-provided-value-for-the-input-parameter-scope-is-not-valid/51789899
-
-            EnvironmentCredential environmentCredential = new EnvironmentCredential();
-            TokenCredentialAuthProvider tokenCredentialAuthProvider = new TokenCredentialAuthProvider(environmentCredential, scopes);
-
-            //Try to get something from the Graph!!
-            HttpClient httpClient = GraphClientFactory.Create(tokenCredentialAuthProvider);
-
-            HttpRequestMessage requestMessage = new HttpRequestMessage(HttpMethod.Get, "https://graph.microsoft.com/v1.0/users/admin@m365x638680.onmicrosoft.com/");
-            HttpResponseMessage response = await httpClient.SendAsync(requestMessage);
-
-            //Print out the response :)
-            string jsonResponse = await response.Content.ReadAsStringAsync();
-            Console.WriteLine(jsonResponse);
-        }
-
-        private static async Task GetChainedTokenCredential()
-        {
-            string[] scopes = new[] { "User.Read" };
-            string clientId = "d662ac70-7482-45af-9dc3-c3cde8eeede4";
-            EnvironmentCredential environmentCredential = new EnvironmentCredential();
-            InteractiveBrowserCredential myBrowserCredential = new InteractiveBrowserCredential(clientId);
-            TokenCredential [] tokenCredentials = new TokenCredential[]{ environmentCredential , myBrowserCredential };
-            ChainedTokenCredential chainedTokenCredential = new ChainedTokenCredential(tokenCredentials);
-            TokenCredentialAuthProvider tokenCredentialAuthProvider = new TokenCredentialAuthProvider(chainedTokenCredential, scopes);
-
-            //Try to get something from the Graph!!
-            HttpClient httpClient = GraphClientFactory.Create(tokenCredentialAuthProvider);
-            HttpRequestMessage requestMessage = new HttpRequestMessage(HttpMethod.Get, "https://graph.microsoft.com/v1.0/users/admin@m365x638680.onmicrosoft.com/");
-            HttpResponseMessage response = await httpClient.SendAsync(requestMessage);
-
-            //Print out the response :)
-            string jsonResponse = await response.Content.ReadAsStringAsync();
-            Console.WriteLine(jsonResponse);
-        }
-
-        private static async Task GetAuthorizationCodeCredential()
-        {
-            string[] scopes = new[] { "https://graph.microsoft.com/.default" };
-            string clientId = "317bd2d8-58b7-4be6-b5bc-d5567a6df8db";
-
-            //TODO needs to be refreshed
-            string authCode = "OAQABAAIAAABeAFzDwllzTYGDLh_qYbH8-fS3d_J-R8zEdrSFxP3SMigriWF5cdAiV5KkrWu2E_M5m-OBUZBftegjZymsS3dgFA1ZGorEmSwMjlRzrcyRDOMatyEspA8QnFy7-84aZIMGKPPaQ4FF6g2Ll5J4Jewk0lEKjBkWo1IY8Eja_kly0kuZDgOJyGao_5VJRJYFdcDRXOkwattPyY2v6MeL5dsRxTqzBUducnBA9D54jOkbxVehxLzyYaF7DWNC7teei-PzJ-DOhgAkiuIbtbDObFYvmQDnOLwwxvf3PRdQS_xqw79TxdFKNFMIbuwjIhtS-e_FjClLMZcHohrs11FcWo-fuTwMoQt14HbD9gt0aaxgCgy8CaLH7tJnDyDYGfJTriq1FXC1S76iWgxj_30teP9Ul01vliD1Rmi8hGiejHP2zN0J5RE3HGToDMnGLCbHFYGDiAM5Ju9L6o4QuijuI1UY2059RPKtwjy6P5eBJPUdROv8D7Qm9jSmy6pYH8IYPeVg1l1C6ALAgzDl3Q2RU0v37-i3xhBXz-ZpWQrXVXreeeZz5z5HS1oo28VuBsMV4KMHgIslQZ2vJw4XI4-EUyCfw6avx3Cgv2G22BtqyPGBi5Fm2nkaORdnxQcsp6OxpGvjSksSFmjV8F-12KmdEif_0__rtz7t2dmQrZ6Hg12uNSAA";
-            AuthorizationCodeCredential authorizationCodeCredential = new AuthorizationCodeCredential("9cacb64e-358b-418b-967a-3cabc2a0ea95",
-                clientId,
-                "ahYBc9/Nejqg=b@GzXvo[2xlGgLHIq59",
-                authCode);
-            TokenCredentialAuthProvider tokenCredentialAuthProvider = new TokenCredentialAuthProvider(authorizationCodeCredential, scopes);
-
-            //Try to get something from the Graph!!
-            HttpClient httpClient = GraphClientFactory.Create(tokenCredentialAuthProvider);
-            HttpRequestMessage requestMessage = new HttpRequestMessage(HttpMethod.Get, "https://graph.microsoft.com/v1.0/me/");
-            HttpResponseMessage response = await httpClient.SendAsync(requestMessage);
-
-            //Print out the response :)
-            string jsonResponse = await response.Content.ReadAsStringAsync();
-            Console.WriteLine(jsonResponse);
-        }
-
-        private static async Task GetDeviceCodeCredential()
-        {
-            string[] scopes = new[] { "User.Read" };
-            string clientId = "cdc858be-9aaa-4339-94e1-86414d05a056";
-            string expectedCode = "This is a test";
-
-            DeviceCodeCredential deviceCodeCredential =new DeviceCodeCredential((code, cancelToken) => VerifyDeviceCode(code, expectedCode), 
-                "9cacb64e-358b-418b-967a-3cabc2a0ea95" , clientId);
-            TokenCredentialAuthProvider tokenCredentialAuthProvider = new TokenCredentialAuthProvider(deviceCodeCredential, scopes);
-        
-            //Try to get something from the Graph!!
-            HttpClient httpClient = GraphClientFactory.Create(tokenCredentialAuthProvider);
-            HttpRequestMessage requestMessage = new HttpRequestMessage(HttpMethod.Get, "https://graph.microsoft.com/v1.0/me/");
-            HttpResponseMessage response = await httpClient.SendAsync(requestMessage);
-        
-            //Print out the response :)
-            string jsonResponse = await response.Content.ReadAsStringAsync();
-            Console.WriteLine(jsonResponse);
-        }
-
-        private static Task VerifyDeviceCode(DeviceCodeInfo code, string message)
-        {
-            Console.WriteLine(code.Message);
-            return Task.CompletedTask;
-        }
-
-        private static async Task GetClientSecretCredentialCredential()
-        {
-            string[] scopes = new[] { "https://graph.microsoft.com/.default" };//see https://stackoverflow.com/questions/51781898/aadsts70011-the-provided-value-for-the-input-parameter-scope-is-not-valid/51789899
-
-            ClientSecretCredential clientSecretCredential = new ClientSecretCredential("9cacb64e-358b-418b-967a-3cabc2a0ea95", "cdc858be-9aaa-4339-94e1-86414d05a056", "AI6ju0@Jn4ECkg1rv[QOrW_.hn4_VD26");
-            TokenCredentialAuthProvider tokenCredentialAuthProvider = new TokenCredentialAuthProvider(clientSecretCredential, scopes);
-            
-            //Try to get something from the Graph!!
-            HttpClient httpClient = GraphClientFactory.Create(tokenCredentialAuthProvider);
-            HttpRequestMessage requestMessage = new HttpRequestMessage(HttpMethod.Get, "https://graph.microsoft.com/v1.0/users/admin@m365x638680.onmicrosoft.com/");
-            HttpResponseMessage response = await httpClient.SendAsync(requestMessage);
-            
-            //Print out the response :)
-            string jsonResponse = await response.Content.ReadAsStringAsync();
-            Console.WriteLine(jsonResponse);
-        }
-
-        private static async Task GetClientSecretCredentialCredentialWithCertificate()
-        {
-            string[] scopes = new[] { "https://graph.microsoft.com/.default" };//see https://stackoverflow.com/questions/51781898/aadsts70011-the-provided-value-for-the-input-parameter-scope-is-not-valid/51789899
-
-            // ClientSecretCredential clientSecretCredential = new ClientSecretCredential("9cacb64e-358b-418b-967a-3cabc2a0ea95", "cdc858be-9aaa-4339-94e1-86414d05a056", "AI6ju0@Jn4ECkg1rv[QOrW_.hn4_VD26");
-            
-            X509Certificate2 x509Certificate2 = new X509Certificate2("mycert.pfx", "Nemore11");
-            ClientCertificateCredential clientCertificateCredential = new ClientCertificateCredential("9cacb64e-358b-418b-967a-3cabc2a0ea95", "317bd2d8-58b7-4be6-b5bc-d5567a6df8db", x509Certificate2);
-            TokenCredentialAuthProvider tokenCredentialAuthProvider = new TokenCredentialAuthProvider(clientCertificateCredential, scopes);
-
-            //Try to get something from the Graph!!
-            HttpClient httpClient = GraphClientFactory.Create(tokenCredentialAuthProvider);
-            HttpRequestMessage requestMessage = new HttpRequestMessage(HttpMethod.Get, "https://graph.microsoft.com/v1.0/users/admin@m365x638680.onmicrosoft.com/");
-            HttpResponseMessage response = await httpClient.SendAsync(requestMessage);
-
-            //Print out the response :)
-            string jsonResponse = await response.Content.ReadAsStringAsync();
-            Console.WriteLine(jsonResponse);
-        }
-
-        private static async Task GetUseUsernamePasswordCredential()
-        {
-            string[] scopes = new[] { "User.Read"};
-            string clientId = "cdc858be-9aaa-4339-94e1-86414d05a056";
-            UsernamePasswordCredential usernamePasswordCredential = new UsernamePasswordCredential("admin@m365x638680.onmicrosoft.com", "X5u3qG9oaY",
-                "9cacb64e-358b-418b-967a-3cabc2a0ea95", clientId);
-            TokenCredentialAuthProvider tokenCredentialAuthProvider = new TokenCredentialAuthProvider(usernamePasswordCredential, scopes);
-
-            //Try to get something from the Graph!!
-            HttpClient httpClient = GraphClientFactory.Create(tokenCredentialAuthProvider);
-            HttpRequestMessage requestMessage = new HttpRequestMessage(HttpMethod.Get, "https://graph.microsoft.com/v1.0/me/");
-            HttpResponseMessage response = await httpClient.SendAsync(requestMessage);
-
-            //Print out the response :)
-            string jsonResponse = await response.Content.ReadAsStringAsync();
-            Console.WriteLine(jsonResponse);
-
-        }
-
-        private static async Task GetUsingAzureCoreInteractiveCredential()
-        {
-string clientId = "d662ac70-7482-45af-9dc3-c3cde8eeede4";
-string[] scopes = new[] { "User.Read", "Mail.ReadWrite" };
-
-InteractiveBrowserCredential myBrowserCredential = new InteractiveBrowserCredential(clientId);
-TokenCredentialAuthProvider tokenCredentialAuthProvider = new TokenCredentialAuthProvider(myBrowserCredential, scopes);
-
-//Try to get something from the Graph!!
-HttpClient httpClient = GraphClientFactory.Create(tokenCredentialAuthProvider);
-HttpRequestMessage requestMessage = new HttpRequestMessage(HttpMethod.Get, "https://graph.microsoft.com/v1.0/me/");
-HttpResponseMessage response = await httpClient.SendAsync(requestMessage);
-
-            //Print out the response :)
-            string jsonResponse = await response.Content.ReadAsStringAsync();
-            Console.WriteLine(jsonResponse);
-        }
-
     }
 }
