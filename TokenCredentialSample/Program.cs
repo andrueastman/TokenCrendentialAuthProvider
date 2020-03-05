@@ -1,6 +1,7 @@
 ﻿using Microsoft.Graph;
 using Microsoft.Identity.Client;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
 using System.Security.Cryptography.X509Certificates;
@@ -48,7 +49,36 @@ namespace TokenCredentialSample
             // await GetDefaultTokenCredential();
 
             // Test actual work
-            await GetsWithActual();
+            // await GetsWithActual();
+
+            // Test with IntegratedWindows Auth
+            await TestWithIntergratedWindowsAuth();
+        }
+
+        private static async Task TestWithIntergratedWindowsAuth()
+        {
+string clientId = "555f95bc-ea6e-4dae-b28d-a0fbd2bc5f24";
+string authority = "https://login.microsoftonline.com/organizations/";
+string[] scopes = new[] { "User.Read", "Mail.ReadWrite" };
+
+IPublicClientApplication publicClientApplication = PublicClientApplicationBuilder
+    .Create(clientId)
+    .Build();
+
+IntegratedWindowsTokenCredential integratedWindowsTokenCredential = new IntegratedWindowsTokenCredential(publicClientApplication);
+TokenCredentialAuthProvider tokenCredentialAuthProvider = new TokenCredentialAuthProvider(integratedWindowsTokenCredential, scopes);
+
+//Try to get something from the Graph!!
+HttpClient httpClient = GraphClientFactory.Create(tokenCredentialAuthProvider);
+
+HttpRequestMessage requestMessage = new HttpRequestMessage(HttpMethod.Get, "https://graph.microsoft.com/v1.0/me");
+            HttpResponseMessage response = await httpClient.SendAsync(requestMessage);
+
+            //Print out the response :)
+            string jsonResponse = await response.Content.ReadAsStringAsync();
+            Console.WriteLine(jsonResponse);
+
+
         }
 
         private static async Task GetsWithActual()
@@ -56,13 +86,13 @@ namespace TokenCredentialSample
             string clientId = "555f95bc-ea6e-4dae-b28d-a0fbd2bc5f24";
             string[] scopes = new[] { "User.Read", "Mail.ReadWrite" };
 
-            InteractiveBrowserCredential myBrowserCredential = new InteractiveBrowserCredential(clientId);
+InteractiveBrowserCredential myBrowserCredential = new InteractiveBrowserCredential(clientId);
 
-            //Try to get something from the Graph!!
-            BaseClient baseClient = new BaseClient("https://graph.microsoft.com/", myBrowserCredential);
+//Try to get something from the Graph!!
+BaseClient baseClient = new BaseClient("https://graph.microsoft.com/", myBrowserCredential);
 
-            BaseRequest requestMessage = new BaseRequest( "https://graph.microsoft.com/v1.0/me/",baseClient);
-            var response = await requestMessage.WithScopes<BaseRequest>(scopes).SendAsync<JObject>(null,CancellationToken.None);
+BaseRequest requestMessage = new BaseRequest( "https://graph.microsoft.com/v1.0/me/",baseClient);
+var response = await requestMessage.WithScopes<BaseRequest>(scopes).SendAsync<JObject>(null,CancellationToken.None);
 
             //Print out the response :)
             Console.WriteLine(response.ToString());
@@ -230,16 +260,16 @@ namespace TokenCredentialSample
 
         private static async Task GetUsingAzureCoreInteractiveCredential()
         {
-            string clientId = "d662ac70-7482-45af-9dc3-c3cde8eeede4";
-            string[] scopes = new[] { "User.Read", "Mail.ReadWrite" };
+string clientId = "d662ac70-7482-45af-9dc3-c3cde8eeede4";
+string[] scopes = new[] { "User.Read", "Mail.ReadWrite" };
 
-            InteractiveBrowserCredential myBrowserCredential = new InteractiveBrowserCredential(clientId);
-            TokenCredentialAuthProvider tokenCredentialAuthProvider = new TokenCredentialAuthProvider(myBrowserCredential, scopes);
+InteractiveBrowserCredential myBrowserCredential = new InteractiveBrowserCredential(clientId);
+TokenCredentialAuthProvider tokenCredentialAuthProvider = new TokenCredentialAuthProvider(myBrowserCredential, scopes);
 
-            //Try to get something from the Graph!!
-            HttpClient httpClient = GraphClientFactory.Create(tokenCredentialAuthProvider);
-            HttpRequestMessage requestMessage = new HttpRequestMessage(HttpMethod.Get, "https://graph.microsoft.com/v1.0/me/");
-            HttpResponseMessage response = await httpClient.SendAsync(requestMessage);
+//Try to get something from the Graph!!
+HttpClient httpClient = GraphClientFactory.Create(tokenCredentialAuthProvider);
+HttpRequestMessage requestMessage = new HttpRequestMessage(HttpMethod.Get, "https://graph.microsoft.com/v1.0/me/");
+HttpResponseMessage response = await httpClient.SendAsync(requestMessage);
 
             //Print out the response :)
             string jsonResponse = await response.Content.ReadAsStringAsync();
